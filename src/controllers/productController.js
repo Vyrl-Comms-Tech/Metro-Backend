@@ -1,7 +1,50 @@
 const Product = require('../models/Product')
-const createCrudController = require('./crudController')
+const { paginate, search, pickFilters, listResponse } = require('../utils/query')
 
-module.exports = createCrudController(Product, {
-  searchFields: ['name'],
-  filterFields: ['collectionSlug', 'category', 'type', 'metal', 'gemstone', 'shape'],
-})
+const FILTER_FIELDS = ['collectionSlug', 'category', 'type', 'metal', 'gemstone', 'shape']
+const SORT = { createdAt: -1 }
+
+// GET /  ?page=1&limit=20&q=text&field=value
+async function list(req, res) {
+  const paging = paginate(req.query)
+  const filter = pickFilters(req.query, FILTER_FIELDS)
+  if (req.query.q) Object.assign(filter, search(req.query.q, ['name']))
+
+  const [items, total] = await Promise.all([
+    Product.find(filter).sort(SORT).skip(paging.skip).limit(paging.limit),
+    Product.countDocuments(filter),
+  ])
+  res.json(listResponse(items, total, paging))
+}
+
+// GET /:id
+async function getOne(req, res) {
+  const doc = await Product.findById(req.params.id)
+  if (!doc) return res.status(404).json({ message: 'Product not found' })
+  res.json(doc)
+}
+
+// POST /
+async function create(req, res) {
+  const doc = await Product.create(req.body)
+  res.status(201).json(doc)
+}
+
+// PUT /:id
+async function update(req, res) {
+  const doc = await Product.findByIdAndUpdate(req.params.id, req.body, {
+    returnDocument: 'after',
+    runValidators: true,
+  })
+  if (!doc) return res.status(404).json({ message: 'Product not found' })
+  res.json(doc)
+}
+
+// DELETE /:id
+async function remove(req, res) {
+  const doc = await Product.findByIdAndDelete(req.params.id)
+  if (!doc) return res.status(404).json({ message: 'Product not found' })
+  res.json({ message: 'Product deleted', id: doc.id })
+}
+
+module.exports = { list, getOne, create, update, remove }

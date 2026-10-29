@@ -1,10 +1,10 @@
 // Fills the database with starting content (collections, FAQs, reels, site text).
 //   pnpm seed   replaces categories, FAQs, reels and site content; products are untouched
-require('dotenv').config()
-const { copyFileSync } = require('node:fs')
+const { readFileSync } = require('node:fs')
 const path = require('node:path')
 const mongoose = require('mongoose')
-const { UPLOAD_DIR } = require('./middleware/upload.js')
+const { mongoUrl } = require('./config/env.js')
+const { uploadToR2 } = require('./utils/r2.js')
 const { CATEGORIES } = require('./seedData/categories.js')
 const { FAQ_CATEGORIES } = require('./seedData/faqs.js')
 const { REELS } = require('./seedData/reels.js')
@@ -17,19 +17,23 @@ const Reel = require('./models/Reel.js')
 
 const PUBLIC_DIR = path.join(__dirname, '../../public')
 
-// card images ship with the website; copy them next to the uploads so the API serves them
-const stockImage = (name) => {
+// card images ship with the website; upload them to R2 and store the public URL
+const stockImage = async (name) => {
   if (!name) return undefined
-  copyFileSync(path.join(PUBLIC_DIR, name), path.join(UPLOAD_DIR, name))
-  return `/uploads/${name}`
+  const ext = path.extname(name).slice(1).toLowerCase().replace('jpg', 'jpeg')
+  return uploadToR2({
+    originalname: name,
+    mimetype: `image/${ext}`,
+    buffer: readFileSync(path.join(PUBLIC_DIR, name)),
+  })
 }
 
 async function seed() {
-  await mongoose.connect(process.env.MONGO_DB_URL)
+  await mongoose.connect(mongoUrl)
 
   await Category.deleteMany({})
   await Category.insertMany(
-    CATEGORIES.map((c, i) => ({ ...c, image: stockImage(c.image), order: i })),
+    await Promise.all(CATEGORIES.map(async (c, i) => ({ ...c, image: await stockImage(c.image), order: i }))),
   )
 
   await Faq.deleteMany({})

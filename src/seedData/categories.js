@@ -38,9 +38,21 @@ const CATEGORIES = [
     image: 'd6.jpg',
   },
   {
+    title: 'Loose Diamond',
+    slug: 'loose-diamond',
+    subCategories: ['Natural Diamond', 'Lab Grown Diamond'],
+    description: 'Explore natural and lab grown loose diamonds',
+  },
+  {
+    title: 'Diamonds',
+    slug: 'diamonds',
+    subCategories: ['Natural Diamond', 'Lab Grown Diamond'],
+    description: 'Discover natural and lab grown diamonds',
+  },
+  {
     title: 'Jewellery',
     slug: 'jewellery',
-    subCategories: ['Rings', 'Earrings', 'Bracelets', 'Necklaces'],
+    subCategories: ['Rings', 'Earrings', 'Necklaces', 'Bracelets', 'Exclusive Pieces'],
     description: 'Explore the full collection',
     image: 'd8.jpg',
   },

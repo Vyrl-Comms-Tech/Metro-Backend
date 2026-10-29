@@ -3,7 +3,7 @@ const SITE_CONTENT = {
   homeBanner: { heading: 'Design your perfect engagement ring', buttonText: 'Get Started', image: '' },
   contact: {
     whatsapp: '971523606874',
-    email: 'info@fergusjames.com',
+    email: 'info@metrojewellers.com',
     phone: '+971 52 360 6874',
     address: 'Office 3107, Floor 31\nMazaya Tower AA1\nJumeirah Lake Towers\nDubai, UAE',
   },
