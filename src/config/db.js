@@ -1,8 +1,10 @@
 const mongoose = require('mongoose')
-const { mongoUrl } = require('./env')
+
+// responses include `id` next to `_id`, which is what the dashboard uses
+mongoose.set('toJSON', { virtuals: true })
 
 async function connectDB() {
-  await mongoose.connect(mongoUrl)
+  await mongoose.connect(process.env.MONGODB_URL)
   console.log(`MongoDB connected: ${mongoose.connection.name}`)
 }
 

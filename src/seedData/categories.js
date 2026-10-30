@@ -1,5 +1,13 @@
+// Jewellery > subcategory > options. Products store these titles as subCategory and category.
+const JEWELLERY_TREE = [
+  { title: 'Earrings', options: ['Diamond Studs', 'Diamond Hoops', 'Fashion Drops', 'Fashion Studs', 'Letter Studs'] },
+  { title: 'Necklaces', options: ['Diamond Pendants', 'Fashion Pendants', 'English Letter Pendants', 'Arabic Letter Pendants'] },
+  { title: 'Rings', options: ['Plain', 'Diamond', 'Exclusive Engagement Rings', 'Eternity Rings', 'Gemstone Rings', 'Fashion Rings', 'Constellation Rings', 'Fancy Coloured Diamond Rings'] },
+  { title: 'Bracelets', options: ['Tennis Bracelets', 'Letter Bracelets'] },
+]
+
 // Starting collections. `image` is a file name in /public, copied into uploads by the seed.
-const CATEGORIES = [
+const CATEGORIES_RAW = [
   {
     title: 'Engagement Rings',
     slug: 'engagement-rings',
@@ -52,7 +60,7 @@ const CATEGORIES = [
   {
     title: 'Jewellery',
     slug: 'jewellery',
-    subCategories: ['Rings', 'Earrings', 'Necklaces', 'Bracelets', 'Exclusive Pieces'],
+    subCategories: [...JEWELLERY_TREE],
     description: 'Explore the full collection',
     image: 'd8.jpg',
   },
@@ -64,4 +72,10 @@ const CATEGORIES = [
   },
 ]
 
-module.exports = { CATEGORIES }
+// plain names are shorthand for a subcategory without options
+const CATEGORIES = CATEGORIES_RAW.map((c) => ({
+  ...c,
+  subCategories: c.subCategories.map((s) => (typeof s === 'string' ? { title: s, options: [] } : s)),
+}))
+
+module.exports = { CATEGORIES, JEWELLERY_TREE }

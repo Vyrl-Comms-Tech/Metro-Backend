@@ -2,6 +2,7 @@ const notFound = (req, res) => res.status(404).json({ message: 'Route not found'
 
 // turns Mongoose and upload errors into readable responses
 const errorHandler = (err, req, res, next) => {
+  if (err.statusCode) return res.status(err.statusCode).json({ message: err.message })
   if (err.name === 'ValidationError') {
     return res.status(400).json({ message: err.message, fields: Object.keys(err.errors) })
   }

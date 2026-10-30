@@ -1,5 +1,4 @@
 const GoldPrice = require('../models/GoldPrice')
-const { goldApiKey } = require('../config/env')
 
 const SOURCE_URL = 'https://api.gold-api.com/price/XAU'
 const HISTORY_URL = 'https://api.gold-api.com/history'
@@ -55,7 +54,7 @@ async function getGold(range) {
 // Fills the last year of daily prices from the history endpoint. Needs GOLD_API_KEY;
 // the free plan allows 10 history calls an hour, so it runs only when a year is not stored yet, then daily.
 async function backfillHistory({ force = false } = {}) {
-  if (!goldApiKey) return 0
+  if (!process.env.GOLD_API_KEY) return 0
 
   // dev restarts (node --watch) must not burn the hourly limit: skip when a year is already stored
   if (!force) {
@@ -74,7 +73,7 @@ async function backfillHistory({ force = false } = {}) {
     orderBy: 'asc',
   })
   const res = await fetch(`${HISTORY_URL}?${query}`, {
-    headers: { 'x-api-key': goldApiKey },
+    headers: { 'x-api-key': process.env.GOLD_API_KEY },
     signal: AbortSignal.timeout(20000),
   })
   if (!res.ok) throw new Error(`Gold history source failed (${res.status})`)

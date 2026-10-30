@@ -1,9 +1,9 @@
 // Fills the database with starting content (collections, FAQs, reels, site text).
 //   pnpm seed   replaces categories, FAQs, reels and site content; products are untouched
+require('dotenv').config()
 const { readFileSync } = require('node:fs')
 const path = require('node:path')
 const mongoose = require('mongoose')
-const { mongoUrl } = require('./config/env.js')
 const { uploadToR2 } = require('./utils/r2.js')
 const { CATEGORIES } = require('./seedData/categories.js')
 const { FAQ_CATEGORIES } = require('./seedData/faqs.js')
@@ -29,7 +29,7 @@ const stockImage = async (name) => {
 }
 
 async function seed() {
-  await mongoose.connect(mongoUrl)
+  await mongoose.connect(process.env.MONGODB_URL)
 
   await Category.deleteMany({})
   await Category.insertMany(

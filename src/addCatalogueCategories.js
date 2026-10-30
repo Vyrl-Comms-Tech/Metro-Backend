@@ -1,25 +1,26 @@
 // Add the requested collections to an existing database without resetting other content.
+require('dotenv').config()
 const mongoose = require('mongoose')
-const { mongoUrl } = require('./config/env')
 const Category = require('./models/Category')
+const { JEWELLERY_TREE } = require('./seedData/categories')
 
 const requested = [
   {
     title: 'Loose Diamond',
     slug: 'loose-diamond',
-    subCategories: ['Natural Diamond', 'Lab Grown Diamond'],
+    subCategories: [{ title: 'Natural Diamond' }, { title: 'Lab Grown Diamond' }],
     description: 'Explore natural and lab grown loose diamonds',
   },
   {
     title: 'Diamonds',
     slug: 'diamonds',
-    subCategories: ['Natural Diamond', 'Lab Grown Diamond'],
+    subCategories: [{ title: 'Natural Diamond' }, { title: 'Lab Grown Diamond' }],
     description: 'Discover natural and lab grown diamonds',
   },
 ]
 
 async function main() {
-  await mongoose.connect(mongoUrl, { serverSelectionTimeoutMS: 5000 })
+  await mongoose.connect(process.env.MONGODB_URL, { serverSelectionTimeoutMS: 5000 })
   try {
     const last = await Category.findOne().sort({ order: -1 }).select('order').lean()
     let nextOrder = (last?.order ?? -1) + 1
@@ -38,7 +39,7 @@ async function main() {
     await Category.updateOne(
       { slug: 'jewellery' },
       {
-        $set: { subCategories: ['Rings', 'Earrings', 'Necklaces', 'Bracelets', 'Exclusive Pieces'] },
+        $set: { subCategories: JEWELLERY_TREE },
         $setOnInsert: { title: 'Jewellery', slug: 'jewellery', order: nextOrder, showOnHome: true },
       },
       { upsert: true },

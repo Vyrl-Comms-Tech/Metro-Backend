@@ -1,11 +1,12 @@
 const Category = require('../models/Category')
+const { uniqueSlug } = require('../utils/slug')
 const { paginate, search, pickFilters, listResponse } = require('../utils/query')
 
-const FILTER_FIELDS = []
+const FILTER_FIELDS = ['active', 'showOnHome']
 const SORT = { order: 1, createdAt: 1 }
 
-// GET /  ?page=1&limit=20&q=text&field=value
-async function list(req, res) {
+
+async function listCategories(req, res) {
   const paging = paginate(req.query)
   const filter = pickFilters(req.query, FILTER_FIELDS)
   if (req.query.q) Object.assign(filter, search(req.query.q, ['title']))
@@ -17,22 +18,28 @@ async function list(req, res) {
   res.json(listResponse(items, total, paging))
 }
 
-// GET /:id
-async function getOne(req, res) {
+
+async function getOneCategory(req, res) {
   const doc = await Category.findById(req.params.id)
   if (!doc) return res.status(404).json({ message: 'Category not found' })
   res.json(doc)
 }
 
-// POST /
-async function create(req, res) {
-  const doc = await Category.create(req.body)
+
+async function createCategory(req, res) {
+  const { slug, ...data } = req.body 
+  if (!data.title?.trim()) return res.status(400).json({ message: 'Title is required' })
+
+  const doc = await Category.create({ ...data, slug: await uniqueSlug(Category, data.title) })
   res.status(201).json(doc)
 }
 
-// PUT /:id
-async function update(req, res) {
-  const doc = await Category.findByIdAndUpdate(req.params.id, req.body, {
+
+async function updateCategory(req, res) {
+  const { slug, ...data } = req.body // changing a title keeps the old link working
+  if ('title' in data && !data.title?.trim()) return res.status(400).json({ message: 'Title is required' })
+
+  const doc = await Category.findByIdAndUpdate(req.params.id, data, {
     returnDocument: 'after',
     runValidators: true,
   })
@@ -40,11 +47,24 @@ async function update(req, res) {
   res.json(doc)
 }
 
-// DELETE /:id
-async function remove(req, res) {
+
+async function setStatusCategory(req, res) {
+  if (typeof req.body.active !== 'boolean') {
+    return res.status(400).json({ message: '"active" must be true or false' })
+  }
+  const doc = await Category.findByIdAndUpdate(
+    req.params.id,
+    { active: req.body.active },
+    { returnDocument: 'after' },
+  )
+  if (!doc) return res.status(404).json({ message: 'Category not found' })
+  res.json(doc)
+}
+
+async function removeCategory(req, res) {
   const doc = await Category.findByIdAndDelete(req.params.id)
   if (!doc) return res.status(404).json({ message: 'Category not found' })
   res.json({ message: 'Category deleted', id: doc.id })
 }
 
-module.exports = { list, getOne, create, update, remove }
+module.exports = { listCategories, getOneCategory, createCategory, updateCategory, setStatusCategory, removeCategory }

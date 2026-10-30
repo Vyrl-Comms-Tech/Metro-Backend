@@ -22,11 +22,9 @@ function pickFilters(query, fields) {
   return filter
 }
 
-const listResponse = (items, total, { page, limit }) => ({
-  items,
-  total,
-  page,
-  pages: Math.max(1, Math.ceil(total / limit)),
-})
+const listResponse = (items, total, { page, limit }) => {
+  const pages = Math.max(1, Math.ceil(total / limit))
+  return { items, total, page, pages, hasNext: page < pages, hasPrev: page > 1 }
+}
 
 module.exports = { paginate, search, pickFilters, listResponse }

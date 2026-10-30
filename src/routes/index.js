@@ -1,13 +1,18 @@
 const { Router } = require('express')
 
+const { protectWrites } = require('../middleware/auth')
+
 const router = Router()
 
-router.use('/products', require('./productRoutes'))
-router.use('/categories', require('./categoryRoutes'))
-router.use('/faqs', require('./faqRoutes'))
-router.use('/reels', require('./reelRoutes'))
-router.use('/content', require('./contentRoutes'))
+// public routes
+router.use('/auth', require('./authRoutes'))
 router.use('/gold', require('./goldRoutes'))
-router.use('/uploads', require('./uploadRoutes'))
+
+router.use('/products', protectWrites, require('./productRoutes'))
+router.use('/categories', protectWrites, require('./categoryRoutes'))
+router.use('/faqs', protectWrites, require('./faqRoutes'))
+router.use('/reels', protectWrites, require('./reelRoutes'))
+router.use('/content', protectWrites, require('./contentRoutes'))
+router.use('/uploads', protectWrites, require('./uploadRoutes'))
 
 module.exports = router

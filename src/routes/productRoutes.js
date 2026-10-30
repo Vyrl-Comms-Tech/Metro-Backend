@@ -3,10 +3,11 @@ const controller = require('../controllers/productController')
 
 const router = Router()
 
-router.get('/', controller.list)
-router.post('/', controller.create)
-router.get('/:id', controller.getOne)
-router.put('/:id', controller.update)
-router.delete('/:id', controller.remove)
+router.get('/getAll', controller.list)
+router.get('/filters', controller.filters)
+router.post('/create', controller.create)
+router.get('/get/:id', controller.getOne)
+router.put('/update/:id', controller.update)
+router.delete('/remove/:id', controller.remove)
 
 module.exports = router
