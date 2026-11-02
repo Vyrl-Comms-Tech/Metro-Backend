@@ -1,9 +1,10 @@
 const Product = require('../models/Product')
 const { checkCategoryPath } = require('../utils/categoryPath')
 const { paginate, search, pickFilters, listResponse } = require('../utils/query')
+const { variantTitle } = require('../utils/title')
 
-const FILTER_FIELDS = ['mainCategory', 'subCategory', 'category', 'type', 'metal', 'gemstone', 'shape', 'gender', 'pendantType']
-// ?sort=az|za|priceAsc|priceDesc, anything else (best, new) is newest first; _id keeps pages stable
+const FILTER_FIELDS = ['mainCategory', 'subCategory', 'category', 'type', 'metal', 'gemstone', 'shape', 'gender', 'ringCovering', 'style', 'pendantType']
+
 const SORTS = { az: ['name', 1], za: ['name', -1], priceAsc: ['price', 1], priceDesc: ['price', -1] }
 function sortFor(sort, pricePath) {
   const [field, dir] = SORTS[sort] ?? ['createdAt', -1]
@@ -12,16 +13,26 @@ function sortFor(sort, pricePath) {
 
 const VARIANT_FILTERS = { type: 'variants.type', metal: 'variants.metal' }
 
-// ?width=2&carat=1 style ranges: widthMin / widthMax, caratMin / caratMax
 const RANGE_FIELDS = ['width', 'carat']
 
-// every filter takes one value or several separated by commas (?metal=18k White Gold,Platinum)
 function listFilter(query) {
   const filter = {}
   const params = { ...query, type: query.type ?? query.diamondType }
   for (const [key, value] of Object.entries(pickFilters(params, FILTER_FIELDS))) {
     const values = value.split(',').map((v) => v.trim()).filter(Boolean)
     filter[VARIANT_FILTERS[key] ?? key] = values.length > 1 ? { $in: values } : values[0]
+  }
+  // onlyCategory=Plain,Diamond keeps just those categories (a chosen category must be one of them)
+  const only = String(query.onlyCategory ?? '').split(',').map((v) => v.trim()).filter(Boolean)
+  if (only.length) {
+    const chosen = filter.category?.$in ?? (filter.category ? [filter.category] : [])
+    filter.category = { $in: chosen.length ? chosen.filter((c) => only.includes(c)) : only }
+  }
+  // notCategory=Plain,Diamond leaves those categories out (View All Rings without the wedding rings)
+  const notCategory = String(query.notCategory ?? '').split(',').map((v) => v.trim()).filter(Boolean)
+  if (notCategory.length) {
+    const chosen = filter.category
+    filter.category = { ...(chosen && (typeof chosen === 'string' ? { $in: [chosen] } : chosen)), $nin: notCategory }
   }
   for (const field of RANGE_FIELDS) {
     const min = query[`${field}Min`]
@@ -40,18 +51,24 @@ const flag = (value) => ['true', '1'].includes(String(value).toLowerCase())
 const CARD_FIELDS = ['name', 'mainCategory', 'subCategory', 'category', 'gemstone', 'shape', 'width', 'carat', 'gender', 'ringCovering', 'pendantType']
 const keep = (fields) => Object.fromEntries(fields.map((k) => [k, 1]))
 
-// the part of the filter that is about a variant (type, metal); it has to match the variation row itself, not just the product
 const variantPart = (filter) => Object.fromEntries(Object.entries(filter).filter(([key]) => key.startsWith('variants.')))
 
-// GET /getAll  ?page=1&limit=20&q=text&subCategory=...&diamondType=...&metal=...&shape=...&gemstone=...&pendantType=...
-//   &widthMin=&widthMax=&caratMin=&caratMax=   ranges; any filter also takes several values separated by commas
-//   &cardDetails=true    only what a product card needs (id, name, image, hoverImage, price, category fields), no variants or details
-//   &sort=az|za|priceAsc|priceDesc   (default newest first)
-//   &withVariation=true  one item per variation instead of one per product, and "total" counts the variations
+// a row built by an aggregation shows one variation: its `name` becomes the full title, the product's name moves to `baseName`
+// `key` is the field holding the variation's own carat
+const withTitle = (key) => (item) => {
+  const { [key]: carat, variantName, ...rest } = item
+  return {
+    ...rest,
+    carat: carat ?? rest.carat,
+    name: variantName || variantTitle(rest.name, { carat, type: rest.type, metal: rest.metal }),
+    baseName: rest.name,
+  }
+}
+
 async function list(req, res) {
   const paging = paginate(req.query)
   const filter = listFilter(req.query)
-  if (req.query.q) Object.assign(filter, search(req.query.q, ['name']))
+  if (req.query.q) Object.assign(filter, search(req.query.q, ['name', 'variants.name']))
   const card = flag(req.query.cardDetails)
   const perVariation = flag(req.query.withVariation)
   const sort = req.query.sort
@@ -90,6 +107,9 @@ async function list(req, res) {
           id: '$_id',
           ...keep(CARD_FIELDS),
           type: '$variants.type',
+          variationCarat: '$variants.carat',
+          variantName: '$variants.name',
+          slug: '$variants.slug',
           metal: '$variants.metal',
           metalCode: '$variants.metalCode',
           productCode: '$variants.productCode',
@@ -114,6 +134,9 @@ async function list(req, res) {
           id: '$_id',
           ...keep(CARD_FIELDS),
           type: '$first.type',
+          firstCarat: '$first.carat',
+          variantName: '$first.name',
+          slug: '$first.slug',
           metal: '$first.metal',
           price: '$first.price',
           compareAtPrice: '$first.compareAtPrice',
@@ -127,6 +150,9 @@ async function list(req, res) {
     items = await Product.find(filter).sort(sortFor(sort, 'variants.0.price')).skip(paging.skip).limit(paging.limit)
   }
 
+  if (perVariation) items = items.map(withTitle('variationCarat'))
+  else if (card) items = items.map(withTitle('firstCarat'))
+
   res.json({
     ...listResponse(items, total, paging),
     totalProducts: products,
@@ -135,43 +161,56 @@ async function list(req, res) {
   })
 }
 
-async function filters(req, res) {
-  const match = listFilter({ mainCategory: req.query.mainCategory, subCategory: req.query.subCategory, category: req.query.category })
+// Each facet: the field it counts, the query parameter that filters it (its own selection is left out of its own counts)
+const FACETS = {
+  gender: { field: 'gender', params: ['gender'] },
+  ringCovering: { field: 'ringCovering', params: ['ringCovering'] },
+  style: { field: 'style', params: ['style'] },
+  diamondType: { field: 'variants.type', params: ['type', 'diamondType'] },
+  category: { field: 'category', params: ['category'] },
+  shape: { field: 'shape', params: ['shape'] },
+  metal: { field: 'variants.metal', params: ['metal'] },
+  gemstone: { field: 'gemstone', params: ['gemstone'] },
+  pendantType: { field: 'pendantType', params: ['pendantType'] },
+}
 
-  // counts are per variant (one row per type / metal combination), so they add up to totalVariants
-  const values = (field) => [
-    { $match: { [field]: { $nin: [null, ''] } } },
-    { $group: { _id: `$${field}`, count: { $sum: 1 } } },
-    { $sort: { _id: 1 } },
-  ]
-  const [result] = await Product.aggregate([
-    { $match: match },
-    { $unwind: '$variants' },
-    {
-      $facet: {
-        diamondType: values('variants.type'),
-        category: values('category'),
-        shape: values('shape'),
-        metal: values('variants.metal'),
-        gemstone: values('gemstone'),
-        pendantType: values('pendantType'),
-      },
-    },
-  ])
-  const pick = (rows) => rows.map((r) => ({ value: r._id, count: r.count }))
-  res.json({
-    diamondType: pick(result.diamondType),
-    category: pick(result.category),
-    shape: pick(result.shape),
-    metal: pick(result.metal),
-    gemstone: pick(result.gemstone),
-    pendantType: pick(result.pendantType),
-  })
+// The options of every filter with how many products match, given the filters already chosen.
+// perProduct=true counts each product once (wedding rings are listed one card per product) instead of once per variation.
+async function filters(req, res) {
+  const perProduct = flag(req.query.perProduct)
+
+  const count = async ({ field, params }) => {
+    const query = { ...req.query }
+    params.forEach((name) => delete query[name]) // choosing a shape must not shrink the list of shapes
+    const filter = listFilter(query)
+    const variantLevel = field.startsWith('variants.')
+    const stages = variantLevel || !perProduct
+      ? [{ $match: filter }, { $unwind: '$variants' }, { $match: variantPart(filter) }]
+      : [{ $match: filter }]
+    const rows = await Product.aggregate([
+      ...stages,
+      { $match: { [field]: { $nin: [null, ''] } } },
+      { $group: { _id: `$${field}`, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ])
+    return rows.map((r) => ({ value: r._id, count: r.count }))
+  }
+
+  const names = Object.keys(FACETS)
+  const results = await Promise.all(names.map((name) => count(FACETS[name])))
+  res.json(Object.fromEntries(names.map((name, i) => [name, results[i]])))
 }
 
 // GET /:id
 async function getOne(req, res) {
   const doc = await Product.findById(req.params.id)
+  if (!doc) return res.status(404).json({ message: 'Product not found' })
+  res.json(doc)
+}
+
+// GET /slug/:slug  (the product that has a variation with this slug)
+async function getBySlug(req, res) {
+  const doc = await Product.findOne({ 'variants.slug': req.params.slug })
   if (!doc) return res.status(404).json({ message: 'Product not found' })
   res.json(doc)
 }
@@ -185,15 +224,12 @@ async function create(req, res) {
 
 // PUT /:id
 async function update(req, res) {
-  const current = await Product.findById(req.params.id).lean()
-  if (!current) return res.status(404).json({ message: 'Product not found' })
-  await checkCategoryPath({ ...current, ...req.body })
-
-  const doc = await Product.findByIdAndUpdate(req.params.id, req.body, {
-    returnDocument: 'after',
-    runValidators: true,
-  })
+  const doc = await Product.findById(req.params.id)
   if (!doc) return res.status(404).json({ message: 'Product not found' })
+  await checkCategoryPath({ ...doc.toObject(), ...req.body })
+
+  doc.set(req.body)
+  await doc.save() // saving (not findByIdAndUpdate) keeps each variation's name and slug up to date
   res.json(doc)
 }
 
@@ -204,4 +240,28 @@ async function remove(req, res) {
   res.json({ message: 'Product deleted', id: doc.id })
 }
 
-module.exports = { list, filters, getOne, create, update, remove }
+
+async function getCaratData(req, res) {
+  const match = listFilter({ mainCategory: req.query.mainCategory, subCategory: req.query.subCategory, category: req.query.category })
+
+  const values = (field) => [
+    { $match: { [field]: { $nin: [null, ''] } } },
+    { $group: { _id: `$${field}`, count: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+  ]
+  const [result] = await Product.aggregate([
+    { $match: match },
+    { $unwind: '$variants' },
+    {
+      $facet: {
+        carat: values('carat'),
+      },
+    },
+  ])
+  const pick = (rows) => rows.map((r) => ({ value: r._id, }))
+  res.json({
+    carat: pick(result.carat),
+  })
+}
+
+module.exports = { list, filters, getOne, getBySlug, create, update, remove, getCaratData }

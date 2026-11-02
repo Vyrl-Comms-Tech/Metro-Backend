@@ -28,13 +28,14 @@ const METAL_CODES = METALS.map(([, code]) => code)
 // the metal can sit anywhere in the address: ...-white-gold, or ...-yellow-gold-%D8%AE-1 on letter pieces
 const METAL_IN_URL = /-(white-gold|yellow-gold|rose-gold|platinum)(?=-|$)/
 
-// Lab Grown / Natural: the LG-/NT- code prefix, else the word in the title, else the collection's own filter, else Lab Grown
+// Lab Grown / Natural: the LG-/NT- code prefix, else the word in the title, else the collection's own filter,
+// else none: the source shows no type for the piece, so none is stored
 const stoneType = (p) =>
   /^NT-/.test(p.productCode) ? 'Natural'
   : /^LG-/.test(p.productCode) ? 'Lab Grown'
   : /\bnatural\b/i.test(p.title) ? 'Natural'
   : /\blab[- ]?grown\b/i.test(p.title) ? 'Lab Grown'
-  : p.stoneSource ?? 'Lab Grown'
+  : p.stoneSource
 
 const metalRank = (metal = '') => METALS.findIndex(([word]) => metal.toLowerCase().includes(word))
 const metalCode = (metal, sku = '') => METALS[metalRank(metal)]?.[1] ?? sku.match(/-(WG|YG|RG|PL)(?:-|$)/)?.[1]

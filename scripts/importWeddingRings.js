@@ -41,9 +41,11 @@ const toProduct = (p) => {
     description: p.description,
     gender: p.filters?.gender?.[0],
     ringCovering: p.filters?.ring_sizing?.[0],
+    style: p.filters?.style?.[0], // Channel / Pavé / Micropavé setting
     pendantType: p.pendantType, // necklaces
     variants: (p.variants || []).map((v) => ({
       type: v.type ?? p.type, // earrings carry it on each variant; a ring has one stone type for all its metals
+      carat: v.carat, // bracelets: the carat weight of this variation
       metal: v.metal,
       metalCode: v.metalCode,
       productCode: v.productCode,

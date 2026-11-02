@@ -8,7 +8,7 @@ const { recordPrice, backfillHistory } = require('./services/goldService')
 const { notFound, errorHandler } = require('./middleware/errorHandler')
 
 const PORT = process.env.PORT || 5000
-const CORS_ORIGINS = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',').map((url) => url.trim())
+const CORS_ORIGINS = (process.env.CLIENT_ORIGIN || 'http://localhost:5173' || 'http://localhost:5174').split(',').map((url) => url.trim())
 
 const app = express()
 
@@ -24,8 +24,6 @@ app.use(errorHandler)
 connectDB()
   .then(() => {
     app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`))
-
-    // keep the gold price history growing even when nobody opens the site
     const record = () => recordPrice().catch((err) => console.error('Gold price snapshot failed:', err.message))
     record()
     setInterval(record, 60 * 60 * 1000)
