@@ -4,11 +4,14 @@ const { paginate, search, pickFilters, listResponse } = require('../utils/query'
 const FILTER_FIELDS = []
 const SORT = { order: 1, createdAt: 1 }
 
-// GET /  ?page=1&limit=20&q=text&field=value
+// GET /  ?page=1&limit=20&q=text&active=true
 async function list(req, res) {
   const paging = paginate(req.query)
   const filter = pickFilters(req.query, FILTER_FIELDS)
   if (req.query.q) Object.assign(filter, search(req.query.q, ['name', 'tags']))
+  // ?active=true lists the visible reels (older reels have no flag, so only an explicit false hides one)
+  if (req.query.active === 'true') filter.active = { $ne: false }
+  if (req.query.active === 'false') filter.active = false
 
   const [items, total] = await Promise.all([
     Reel.find(filter).sort(SORT).skip(paging.skip).limit(paging.limit),

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose')
 const Product = require('../models/Product')
 const Category = require('../models/Category')
 const { slugify } = require('../utils/slug')
@@ -334,4 +335,12 @@ async function suggestions(req, res) {
   })
 }
 
-module.exports = { list, filters, getOne, getBySlug, create, update, remove, getCaratData, suggestions }
+// POST /bulk-delete  { ids: [...] }
+async function removeMany(req, res) {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((id) => mongoose.isValidObjectId(id)) : []
+  if (!ids.length) return res.status(400).json({ message: 'Choose at least one product' })
+  const { deletedCount } = await Product.deleteMany({ _id: { $in: ids } })
+  res.json({ message: `${deletedCount} products deleted`, deletedCount })
+}
+
+module.exports = { list, filters, getOne, getBySlug, create, update, remove, removeMany, getCaratData, suggestions }
