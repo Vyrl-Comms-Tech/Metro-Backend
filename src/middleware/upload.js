@@ -1,7 +1,7 @@
 const multer = require('multer')
 
 const MB = 1024 * 1024
-const MAX_IMAGE_SIZE = 3 * MB
+const MAX_IMAGE_SIZE = 2 * MB
 const MAX_VIDEO_SIZE = 100 * MB
 const MAX_FILES = 10
 

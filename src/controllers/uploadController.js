@@ -7,7 +7,7 @@ async function uploadFiles(req, res) {
 
   const tooBig = files.find((f) => f.mimetype.startsWith('image/') && f.size > MAX_IMAGE_SIZE)
   if (tooBig) {
-    return res.status(400).json({ message: `${tooBig.originalname} is larger than 3 MB` })
+    return res.status(400).json({ message: `${tooBig.originalname} is larger than 2 MB` })
   }
 
   const urls = await Promise.all(files.map(uploadToR2))
