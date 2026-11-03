@@ -13,7 +13,11 @@ function search(text, fields) {
   return { $or: fields.map((field) => ({ [field]: pattern })) }
 }
 
-// copies ?field=value into a filter for the allowed fields only
+function wordMatch(text) {
+  const words = String(text).trim().split(/\s+/).map((w) => escapeRegex(w.replace(/(?<=\w{3})s$/i, '')))
+  return new RegExp(`^${words.map((w) => `(?=.*\\b${w})`).join('')}`, 'i')
+}
+
 function pickFilters(query, fields) {
   const filter = {}
   for (const field of fields) {
@@ -27,4 +31,4 @@ const listResponse = (items, total, { page, limit }) => {
   return { items, total, page, pages, hasNext: page < pages, hasPrev: page > 1 }
 }
 
-module.exports = { paginate, search, pickFilters, listResponse }
+module.exports = { escapeRegex, wordMatch, paginate, search, pickFilters, listResponse }

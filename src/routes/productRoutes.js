@@ -11,5 +11,6 @@ router.get('/get/:id', controller.getOne)
 router.get('/slug/:slug', controller.getBySlug)
 router.put('/update/:id', controller.update)
 router.delete('/remove/:id', controller.remove)
+router.get('/suggestion', controller.suggestions)
 
 module.exports = router

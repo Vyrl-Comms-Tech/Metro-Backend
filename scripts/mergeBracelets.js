@@ -47,7 +47,7 @@ const merged = [...groups.values()].map((members) => {
   return {
     ...first,
     name: base,
-    carat: carats.length ? Math.min(...carats) : first.carat, // the smallest, so the product-level carat filter still finds it
+    carat: carats.length ? Math.min(...carats) : first.carat, 
     sourceUrl: undefined,
     variants,
   }

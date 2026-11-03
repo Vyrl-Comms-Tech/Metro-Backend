@@ -1,6 +1,8 @@
 const Product = require('../models/Product')
+const Category = require('../models/Category')
+const { slugify } = require('../utils/slug')
 const { checkCategoryPath } = require('../utils/categoryPath')
-const { paginate, search, pickFilters, listResponse } = require('../utils/query')
+const { wordMatch, paginate, search, pickFilters, listResponse } = require('../utils/query')
 const { variantTitle } = require('../utils/title')
 
 const FILTER_FIELDS = ['mainCategory', 'subCategory', 'category', 'type', 'metal', 'gemstone', 'shape', 'gender', 'ringCovering', 'style', 'pendantType']
@@ -34,6 +36,8 @@ function listFilter(query) {
     const chosen = filter.category
     filter.category = { ...(chosen && (typeof chosen === 'string' ? { $in: [chosen] } : chosen)), $nin: notCategory }
   }
+  // ?q= matches the variation names, so a variation list (and the filter counts) only holds the variations that match
+  if (query.q) filter['variants.name'] = wordMatch(query.q)
   for (const field of RANGE_FIELDS) {
     const min = query[`${field}Min`]
     const max = query[`${field}Max`]
@@ -68,7 +72,6 @@ const withTitle = (key) => (item) => {
 async function list(req, res) {
   const paging = paginate(req.query)
   const filter = listFilter(req.query)
-  if (req.query.q) Object.assign(filter, search(req.query.q, ['name', 'variants.name']))
   const card = flag(req.query.cardDetails)
   const perVariation = flag(req.query.withVariation)
   const sort = req.query.sort
@@ -264,4 +267,71 @@ async function getCaratData(req, res) {
   })
 }
 
-module.exports = { list, filters, getOne, getBySlug, create, update, remove, getCaratData }
+
+async function suggestions(req, res) {
+  const text = String(req.query.search ?? '').trim()
+  const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 5))
+  if (!text) return res.json({ products: [], suggestions: [], collections: [] })
+
+  const nameMatch = wordMatch(text)
+  const lastWord = wordMatch(text.split(/\s+/).pop())
+
+  const [products, names, categories] = await Promise.all([
+    Product.aggregate([
+      { $unwind: '$variants' },
+      { $match: { 'variants.name': nameMatch } },
+      { $sort: { _id: 1 } },
+      { $limit: limit },
+      {
+        $project: {
+          _id: 0,
+          id: '$_id',
+          name: '$variants.name',
+          slug: '$variants.slug',
+          productCode: '$variants.productCode',
+          price: '$variants.price',
+          image: { $arrayElemAt: ['$variants.images', 0] },
+          mainCategory: 1,
+          subCategory: 1,
+        },
+      },
+    ]),
+    Product.aggregate([
+      { $match: { name: nameMatch } },
+      { $group: { _id: { $toLower: '$name' }, count: { $sum: 1 } } },
+    ]),
+    Category.find({}, 'title slug subCategories').lean(),
+  ])
+  const counts = new Map()
+  for (const { _id, count } of names) {
+    const words = _id.split(/\s+/)
+    const at = words.findIndex((w) => lastWord.test(w))
+    if (at < 0) continue
+    for (let back = 0; back <= 2 && back <= at; back++) {
+      const phrase = words.slice(at - back, at + 1)
+      if (phrase.some((w) => /\d/.test(w))) break
+      const key = phrase.join(' ')
+      if (!nameMatch.test(key)) continue
+      counts.set(key, (counts.get(key) ?? 0) + count)
+    }
+  }
+  const matches = [...counts].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length).map(([phrase]) => phrase)
+
+  const collections = []
+  const addCollection = (title, to) => nameMatch.test(title) && collections.push({ title, to })
+  for (const main of categories) {
+    addCollection(main.title, `/collections/${main.slug}`)
+    for (const sub of main.subCategories) {
+      addCollection(sub.title, `/collections/${slugify(sub.title)}`)
+      for (const option of sub.options) addCollection(option.toLowerCase().includes(sub.title.toLowerCase()) ? option : `${option} ${sub.title}`, `/collections/${slugify(sub.title)}/${slugify(option)}`)
+    }
+  }
+
+  res.json({
+    products,
+    suggestions: matches.slice(0, limit + 1),
+    collections: collections.slice(0, limit),
+  })
+}
+
+module.exports = { list, filters, getOne, getBySlug, create, update, remove, getCaratData, suggestions }
