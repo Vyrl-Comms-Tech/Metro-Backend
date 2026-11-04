@@ -25,19 +25,18 @@ function listFilter(query) {
     const values = value.split(',').map((v) => v.trim()).filter(Boolean)
     filter[VARIANT_FILTERS[key] ?? key] = values.length > 1 ? { $in: values } : values[0]
   }
-  // onlyCategory=Plain,Diamond keeps just those categories (a chosen category must be one of them)
   const only = String(query.onlyCategory ?? '').split(',').map((v) => v.trim()).filter(Boolean)
   if (only.length) {
     const chosen = filter.category?.$in ?? (filter.category ? [filter.category] : [])
     filter.category = { $in: chosen.length ? chosen.filter((c) => only.includes(c)) : only }
   }
-  // notCategory=Plain,Diamond leaves those categories out (View All Rings without the wedding rings)
+
   const notCategory = String(query.notCategory ?? '').split(',').map((v) => v.trim()).filter(Boolean)
   if (notCategory.length) {
     const chosen = filter.category
     filter.category = { ...(chosen && (typeof chosen === 'string' ? { $in: [chosen] } : chosen)), $nin: notCategory }
   }
-  // ?q= matches the variation names, so a variation list (and the filter counts) only holds the variations that match
+
   if (query.q) filter['variants.name'] = wordMatch(query.q)
   for (const field of RANGE_FIELDS) {
     const min = query[`${field}Min`]
@@ -52,14 +51,11 @@ function listFilter(query) {
 
 const flag = (value) => ['true', '1'].includes(String(value).toLowerCase())
 
-// what a product card and the shop filters need, nothing else
 const CARD_FIELDS = ['name', 'mainCategory', 'subCategory', 'category', 'gemstone', 'shape', 'width', 'carat', 'gender', 'ringCovering', 'pendantType']
 const keep = (fields) => Object.fromEntries(fields.map((k) => [k, 1]))
 
 const variantPart = (filter) => Object.fromEntries(Object.entries(filter).filter(([key]) => key.startsWith('variants.')))
 
-// a row built by an aggregation shows one variation: its `name` becomes the full title, the product's name moves to `baseName`
-// `key` is the field holding the variation's own carat
 const withTitle = (key) => (item) => {
   const { [key]: carat, variantName, ...rest } = item
   return {
@@ -70,11 +66,19 @@ const withTitle = (key) => (item) => {
   }
 }
 
+// currentSlug leaves the variation being viewed out of the list (without per-variation rows, the product holding it)
+function excludeCurrent(filter, currentSlug, perVariation) {
+  const slug = String(currentSlug ?? '').trim()
+  if (!slug) return { filter, variantMatch: variantPart(filter) }
+  const variantMatch = { ...variantPart(filter), 'variants.slug': { $ne: slug } }
+  return { filter: perVariation ? filter : { ...filter, 'variants.slug': { $ne: slug } }, variantMatch }
+}
+
 async function list(req, res) {
   const paging = paginate(req.query)
-  const filter = listFilter(req.query)
-  const card = flag(req.query.cardDetails)
   const perVariation = flag(req.query.withVariation)
+  const { filter, variantMatch } = excludeCurrent(listFilter(req.query), req.query.currentSlug, perVariation)
+  const card = flag(req.query.cardDetails)
   const sort = req.query.sort
 
   const [products, variationTotal, variantGroups] = await Promise.all([
@@ -82,7 +86,7 @@ async function list(req, res) {
     Product.aggregate([
       { $match: filter },
       { $unwind: '$variants' },
-      { $match: variantPart(filter) },
+      { $match: variantMatch },
       { $count: 'n' },
     ]),
     Product.aggregate([
@@ -97,11 +101,10 @@ async function list(req, res) {
 
   let items
   if (perVariation) {
-    // every variation becomes its own row, carrying the product's name and categories
     items = await Product.aggregate([
       { $match: filter },
       { $unwind: { path: '$variants', includeArrayIndex: 'variationIndex' } },
-      { $match: variantPart(filter) },
+      { $match: variantMatch },
       { $sort: { ...sortFor(sort, 'variants.price'), variationIndex: 1 } },
       { $skip: paging.skip },
       { $limit: paging.limit },
@@ -145,7 +148,7 @@ async function list(req, res) {
           price: '$first.price',
           compareAtPrice: '$first.compareAtPrice',
           image: { $arrayElemAt: ['$first.images', 0] },
-          hoverImage: { $arrayElemAt: ['$first.images', 1] }, // the second photo, for the card's hover
+          hoverImage: { $arrayElemAt: ['$first.images', 1] },
           variationCount: { $size: { $ifNull: ['$variants', []] } },
         },
       },
@@ -160,12 +163,11 @@ async function list(req, res) {
   res.json({
     ...listResponse(items, total, paging),
     totalProducts: products,
-    totalVariants: variantBreakdown.reduce((n, g) => n + g.variants * g.products, 0), // every variant of the matching products
+    totalVariants: variantBreakdown.reduce((n, g) => n + g.variants * g.products, 0),
     variantBreakdown,
   })
 }
 
-// Each facet: the field it counts, the query parameter that filters it (its own selection is left out of its own counts)
 const FACETS = {
   gender: { field: 'gender', params: ['gender'] },
   ringCovering: { field: 'ringCovering', params: ['ringCovering'] },

@@ -30,17 +30,15 @@ const productSchema = new mongoose.Schema(
     description: { type: String, trim: true },
 
     gemstone: { type: String, trim: true },
-    shape: { type: String, trim: true }, // stone shape: Round, Oval, Pear...
+    shape: { type: String, trim: true },
     width: { type: Number, min: 0 },
     carat: { type: Number, min: 0 },
 
-    // wedding rings
     gender: { type: String, enum: ["Male", "Female"], index: true },
-    ringCovering: { type: String, trim: true }, 
-    style: { type: String, trim: true, index: true }, 
+    ringCovering: { type: String, trim: true },
+    style: { type: String, trim: true, index: true },
 
-    // necklaces
-    pendantType: { type: String, trim: true, index: true }, 
+    pendantType: { type: String, trim: true, index: true },
 
     variants: [variantSchema],
     sourceUrl: { type: String, trim: true },
@@ -48,7 +46,6 @@ const productSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// every variation has its own name and a slug made from it
 productSchema.pre("validate", function () {
   for (const v of this.variants) {
     if (!v.name && this.name)
