@@ -13,6 +13,7 @@ router.use('/categories', protectWrites, require('./categoryRoutes'))
 router.use('/faqs', protectWrites, require('./faqRoutes'))
 router.use('/reels', protectWrites, require('./reelRoutes'))
 router.use('/custom-jewellery', protectWrites, require('./customJewelleryRoutes'))
+router.use('/enquiries', require('./enquiryRoutes'))
 router.use('/content', protectWrites, require('./contentRoutes'))
 router.use('/uploads', protectWrites, require('./uploadRoutes'))
 

@@ -6,7 +6,7 @@ const { checkCategoryPath } = require('../utils/categoryPath')
 const { wordMatch, paginate, search, pickFilters, listResponse } = require('../utils/query')
 const { variantTitle } = require('../utils/title')
 
-const FILTER_FIELDS = ['mainCategory', 'subCategory', 'category', 'type', 'metal', 'gemstone', 'shape', 'gender', 'ringCovering', 'style', 'pendantType']
+const FILTER_FIELDS = ['mainCategory', 'subCategory', 'category', 'type', 'metal', 'gemstone', 'shape', 'color', 'clarity', 'cut', 'certificate', 'gender', 'ringCovering', 'style', 'pendantType']
 
 const SORTS = { az: ['name', 1], za: ['name', -1], priceAsc: ['price', 1], priceDesc: ['price', -1] }
 function sortFor(sort, pricePath) {
@@ -51,7 +51,7 @@ function listFilter(query) {
 
 const flag = (value) => ['true', '1'].includes(String(value).toLowerCase())
 
-const CARD_FIELDS = ['name', 'mainCategory', 'subCategory', 'category', 'gemstone', 'shape', 'width', 'carat', 'gender', 'ringCovering', 'pendantType']
+const CARD_FIELDS = ['name', 'mainCategory', 'subCategory', 'category', 'gemstone', 'shape', 'color', 'clarity', 'cut', 'certificate', 'width', 'carat', 'gender', 'ringCovering', 'pendantType']
 const keep = (fields) => Object.fromEntries(fields.map((k) => [k, 1]))
 
 const variantPart = (filter) => Object.fromEntries(Object.entries(filter).filter(([key]) => key.startsWith('variants.')))
@@ -177,6 +177,10 @@ const FACETS = {
   shape: { field: 'shape', params: ['shape'] },
   metal: { field: 'variants.metal', params: ['metal'] },
   gemstone: { field: 'gemstone', params: ['gemstone'] },
+  color: { field: 'color', params: ['color'] },
+  clarity: { field: 'clarity', params: ['clarity'] },
+  cut: { field: 'cut', params: ['cut'] },
+  certificate: { field: 'certificate', params: ['certificate'] },
   pendantType: { field: 'pendantType', params: ['pendantType'] },
 }
 

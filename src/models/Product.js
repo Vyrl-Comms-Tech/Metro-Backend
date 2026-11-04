@@ -2,13 +2,16 @@ const mongoose = require("mongoose");
 const { variantTitle } = require("../utils/title");
 const { slugify } = require("../utils/slug");
 
+
+const DIAMOND_CATEGORIES = ["loose-diamond", "diamonds"];
+
 const variantSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
     slug: { type: String, trim: true, index: true },
     type: { type: String, enum: ["Lab Grown", "Natural"] },
     carat: { type: Number, min: 0 },
-    metal: { type: String, required: true, trim: true },
+    metal: { type: String, required: function () { return !DIAMOND_CATEGORIES.includes(this.parent()?.mainCategory) }, trim: true },
     metalCode: { type: String, trim: true, uppercase: true },
     productCode: { type: String, required: true, trim: true },
     price: { type: Number, min: 0 },
@@ -33,6 +36,11 @@ const productSchema = new mongoose.Schema(
     shape: { type: String, trim: true },
     width: { type: Number, min: 0 },
     carat: { type: Number, min: 0 },
+
+    color: { type: String, trim: true, uppercase: true },
+    clarity: { type: String, trim: true, uppercase: true },
+    cut: { type: String, trim: true },
+    certificate: { type: String, trim: true },
 
     gender: { type: String, enum: ["Male", "Female"], index: true },
     ringCovering: { type: String, trim: true },

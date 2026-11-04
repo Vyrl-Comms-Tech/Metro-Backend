@@ -5,6 +5,7 @@ const express = require('express')
 const routes = require('./routes')
 const connectDB = require('./config/db')
 const { recordPrice, backfillHistory } = require('./services/goldService')
+const { apiLimiter } = require('./middleware/rateLimit')
 const { notFound, errorHandler } = require('./middleware/errorHandler')
 
 const PORT = process.env.PORT || 5000
@@ -12,9 +13,12 @@ const CORS_ORIGINS = (process.env.CLIENT_ORIGIN || 'http://localhost:5173' || 'h
 
 const app = express()
 
+if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY)
+
 app.use(cors({ origin: CORS_ORIGINS, credentials: true }))
 app.use(cookieParser())
 app.use(express.json())
+app.use(apiLimiter)
 
 app.use('/', routes)
 
