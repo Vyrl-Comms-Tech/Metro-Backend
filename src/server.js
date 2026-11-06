@@ -9,7 +9,9 @@ const { apiLimiter } = require('./middleware/rateLimit')
 const { notFound, errorHandler } = require('./middleware/errorHandler')
 
 const PORT = process.env.PORT || 5000
-const CORS_ORIGINS = (process.env.CLIENT_ORIGIN || 'http://localhost:5173' || 'http://localhost:5174').split(',').map((url) => url.trim())
+const LOCAL_ORIGINS = ['http://localhost:5173', 'http://localhost:5174']
+const envOrigins = [process.env.CLIENT_ORIGIN, process.env.PRODUCTION_ORIGIN].flatMap((value) => (value ?? '').split(',')).map((url) => url.trim()).filter(Boolean)
+const CORS_ORIGINS = [...new Set([...LOCAL_ORIGINS, ...envOrigins])]
 
 const app = express()
 
