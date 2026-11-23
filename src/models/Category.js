@@ -18,6 +18,7 @@ const categorySchema = new mongoose.Schema(
     description: { type: String, trim: true }, 
     tag: { type: String, trim: true },
     showOnHome: { type: Boolean, default: true },
+    active: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
   },
   { timestamps: true },

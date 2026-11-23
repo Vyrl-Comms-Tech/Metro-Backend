@@ -4,7 +4,7 @@ const cookieParser = require('cookie-parser')
 const express = require('express')
 const routes = require('./routes')
 const connectDB = require('./config/db')
-const { recordPrice, backfillHistory } = require('./services/goldService')
+// const { recordPrice, backfillHistory } = require('./services/goldService')
 const { apiLimiter } = require('./middleware/rateLimit')
 const { notFound, errorHandler } = require('./middleware/errorHandler')
 
@@ -30,16 +30,17 @@ app.use(errorHandler)
 connectDB()
   .then(() => {
     app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`))
-    const record = () => recordPrice().catch((err) => console.error('Gold price snapshot failed:', err.message))
-    record()
-    setInterval(record, 60 * 60 * 1000)
+    // gold price history is switched off
+    // const record = () => recordPrice().catch((err) => console.error('Gold price snapshot failed:', err.message))
+    // record()
+    // setInterval(record, 60 * 60 * 1000)
 
-    const backfill = (force) =>
-      backfillHistory({ force })
-        .then((n) => n && console.log(`Gold price history: ${n} days loaded`))
-        .catch((err) => console.error('Gold price backfill failed:', err.message))
-    backfill(false)
-    setInterval(() => backfill(true), 24 * 60 * 60 * 1000)
+    // const backfill = (force) =>
+    //   backfillHistory({ force })
+    //     .then((n) => n && console.log(`Gold price history: ${n} days loaded`))
+    //     .catch((err) => console.error('Gold price backfill failed:', err.message))
+    // backfill(false)
+    // setInterval(() => backfill(true), 24 * 60 * 60 * 1000)
   })
   .catch((err) => {
     console.error('Could not start the server:', err.message)

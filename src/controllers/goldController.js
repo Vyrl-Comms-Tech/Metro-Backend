@@ -1,9 +1,9 @@
 const { getGold } = require('../services/goldService')
 
-// GET /  ?range=1W|1M|3M|1Y
+// GET /  -> today's rates per gram: [{ label: '24K GOLD', aed: 438.25 }, ...]
 async function get(req, res) {
   try {
-    res.json(await getGold(req.query.range))
+    res.json(await getGold())
   } catch (err) {
     res.status(502).json({ message: err.message })
   }

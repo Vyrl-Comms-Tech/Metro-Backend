@@ -1,13 +1,18 @@
-const GoldPrice = require('../models/GoldPrice')
+// const GoldPrice = require('../models/GoldPrice') // history is switched off
 
 const SOURCE_URL = 'https://api.gold-api.com/price/XAU'
-const HISTORY_URL = 'https://api.gold-api.com/history'
+// const HISTORY_URL = 'https://api.gold-api.com/history'
 const CACHE_MS = 60 * 1000
-const HOUR_MS = 60 * 60 * 1000
-const DAY_MS = 24 * HOUR_MS
+// const HOUR_MS = 60 * 60 * 1000
+// const DAY_MS = 24 * HOUR_MS
 
-const RATES = { AED: 3.6725, USD: 1, SAR: 3.75, QAR: 3.64 }
-const RANGE_DAYS = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 }
+const AED_RATE = 3.6725
+const TROY_GRAMS = 31.1035
+// retail markup per karat
+const MARKUP = { 24: 1.0152, 22: 1.0253, 21: 1.0301, 18: 1.0298, 14: 1.0327 }
+
+// const RATES = { AED: 3.6725, USD: 1, SAR: 3.75, QAR: 3.64 }
+// const RANGE_DAYS = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 }
 
 let cached = null // { usd, updatedAt, fetchedAt }
 
@@ -22,6 +27,18 @@ async function fetchLive() {
   cached = { usd: body.price, updatedAt: body.updatedAt, fetchedAt: Date.now() }
   return cached
 }
+
+// today's retail price per gram in AED for each karat: [{ label: '24K GOLD', aed: 438.25 }, ...]
+async function getGold() {
+  const live = await fetchLive()
+  const gram24 = (live.usd / TROY_GRAMS) * AED_RATE
+  return Object.keys(MARKUP)
+    .map(Number)
+    .sort((a, b) => b - a)
+    .map((k) => ({ label: `${k}K GOLD`, aed: +(((gram24 * k) / 24) * MARKUP[k]).toFixed(2) }))
+}
+
+/* ---- price history (switched off) ----
 
 // stores the current price for this hour (first write wins)
 async function recordPrice() {
@@ -39,7 +56,7 @@ function downsample(rows, daily) {
   return [...byDay.values()].map((r) => ({ date: r.hour, usd: r.usd }))
 }
 
-async function getGold(range) {
+async function getGoldHistory(range) {
   const days = RANGE_DAYS[range] ?? RANGE_DAYS['1M']
   const live = await recordPrice()
   const rows = await GoldPrice.find({ hour: { $gte: new Date(Date.now() - days * DAY_MS) } }).sort({ hour: 1 })
@@ -93,5 +110,6 @@ async function backfillHistory({ force = false } = {}) {
   if (ops.length) await GoldPrice.bulkWrite(ops)
   return ops.length
 }
+*/
 
-module.exports = { getGold, recordPrice, backfillHistory }
+module.exports = { getGold }
