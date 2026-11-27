@@ -1,7 +1,6 @@
 const Subscriber = require('../models/Subscriber')
 const { paginate, search, listResponse } = require('../utils/query')
 
-// POST /  public. Signing up twice is not an error, the visitor just sees the same thank-you
 async function create(req, res) {
   const email = String(req.body.email || '').trim().toLowerCase()
   await Subscriber.findOneAndUpdate({ email }, { $setOnInsert: { email } }, { upsert: true, runValidators: true })

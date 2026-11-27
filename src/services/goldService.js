@@ -1,115 +1,54 @@
-// const GoldPrice = require('../models/GoldPrice') // history is switched off
+// Dubai retail gold rate per gram in AED, with no markup. 24K to 18K come from the source as sent;
+// the source has no 14K, so it is worked out from 24K by purity (14/24)
+const SOURCE_URL = 'https://mazimo.ae/api/gold'
+const CACHE_MS = 5 * 60 * 1000
+const RETRY_MS = 60 * 1000 
+const KARATS = [24, 22, 21, 18] 
 
-const SOURCE_URL = 'https://api.gold-api.com/price/XAU'
-// const HISTORY_URL = 'https://api.gold-api.com/history'
-const CACHE_MS = 60 * 1000
-// const HOUR_MS = 60 * 60 * 1000
-// const DAY_MS = 24 * HOUR_MS
+let cached = null 
+let nextFetchAt = 0
+let lastError = null
+let pending = null
 
-const AED_RATE = 3.6725
-const TROY_GRAMS = 31.1035
-// retail markup per karat
-const MARKUP = { 24: 1.0152, 22: 1.0253, 21: 1.0301, 18: 1.0298, 14: 1.0327 }
-
-// const RATES = { AED: 3.6725, USD: 1, SAR: 3.75, QAR: 3.64 }
-// const RANGE_DAYS = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 }
-
-let cached = null // { usd, updatedAt, fetchedAt }
-
-async function fetchLive() {
-  if (cached && Date.now() - cached.fetchedAt < CACHE_MS) return cached
-
+async function requestRates() {
   const res = await fetch(SOURCE_URL, { signal: AbortSignal.timeout(10000) })
   if (!res.ok) throw new Error(`Gold price source failed (${res.status})`)
   const body = await res.json()
-  if (typeof body.price !== 'number') throw new Error('Gold price source sent an unexpected response')
 
-  cached = { usd: body.price, updatedAt: body.updatedAt, fetchedAt: Date.now() }
-  return cached
-}
-
-// today's retail price per gram in AED for each karat: [{ label: '24K GOLD', aed: 438.25 }, ...]
-async function getGold() {
-  const live = await fetchLive()
-  const gram24 = (live.usd / TROY_GRAMS) * AED_RATE
-  return Object.keys(MARKUP)
-    .map(Number)
-    .sort((a, b) => b - a)
-    .map((k) => ({ label: `${k}K GOLD`, aed: +(((gram24 * k) / 24) * MARKUP[k]).toFixed(2) }))
-}
-
-/* ---- price history (switched off) ----
-
-// stores the current price for this hour (first write wins)
-async function recordPrice() {
-  const live = await fetchLive()
-  const hour = new Date(Math.floor(Date.now() / HOUR_MS) * HOUR_MS)
-  await GoldPrice.updateOne({ hour }, { $setOnInsert: { usd: live.usd } }, { upsert: true })
-  return live
-}
-
-// hourly points for a week, last price of each day for longer ranges
-function downsample(rows, daily) {
-  if (!daily) return rows.map((r) => ({ date: r.hour, usd: r.usd }))
-  const byDay = new Map()
-  for (const r of rows) byDay.set(Math.floor(r.hour.getTime() / DAY_MS), r)
-  return [...byDay.values()].map((r) => ({ date: r.hour, usd: r.usd }))
-}
-
-async function getGoldHistory(range) {
-  const days = RANGE_DAYS[range] ?? RANGE_DAYS['1M']
-  const live = await recordPrice()
-  const rows = await GoldPrice.find({ hour: { $gte: new Date(Date.now() - days * DAY_MS) } }).sort({ hour: 1 })
+  const valid = KARATS.every((_, i) => Number.isFinite(body.k?.[i]) && body.k[i] > 0)
+  if (!valid || Number.isNaN(Date.parse(body.asOf))) {
+    throw new Error('Gold price source sent an unexpected response')
+  }
+  const rates = KARATS.map((karat, i) => ({ label: `${karat}K GOLD`, aed: body.k[i] }))
+  rates.push({ label: '14K GOLD', aed: +((body.k[0] * 14) / 24).toFixed(2) })
 
   return {
-    rates: RATES,
-    current: { usd: live.usd, updatedAt: live.updatedAt },
-    history: downsample(rows, days > 7),
+    rates,
+    asOf: body.asOf, // when these rates were published
   }
 }
 
-// Fills the last year of daily prices from the history endpoint. Needs GOLD_API_KEY;
-// the free plan allows 10 history calls an hour, so it runs only when a year is not stored yet, then daily.
-async function backfillHistory({ force = false } = {}) {
-  if (!process.env.GOLD_API_KEY) return 0
-
-  // dev restarts (node --watch) must not burn the hourly limit: skip when a year is already stored
-  if (!force) {
-    const oldest = await GoldPrice.findOne().sort({ hour: 1 })
-    if (oldest && Date.now() - oldest.hour.getTime() > 360 * DAY_MS) return 0
+async function getGold() {
+  if (Date.now() >= nextFetchAt) {
+    // requests arriving together share one call to the source
+    pending ??= requestRates()
+      .then((result) => {
+        cached = result
+        lastError = null
+        nextFetchAt = Date.now() + CACHE_MS
+      })
+      .catch((err) => {
+        lastError = err
+        nextFetchAt = Date.now() + RETRY_MS
+        console.error('Gold price refresh failed:', err.message)
+      })
+      .finally(() => {
+        pending = null
+      })
+    await pending
   }
-
-  const end = Math.floor(Date.now() / 1000)
-  const start = end - 365 * 24 * 60 * 60
-  const query = new URLSearchParams({
-    symbol: 'XAU',
-    startTimestamp: start,
-    endTimestamp: end,
-    groupBy: 'day',
-    aggregation: 'avg',
-    orderBy: 'asc',
-  })
-  const res = await fetch(`${HISTORY_URL}?${query}`, {
-    headers: { 'x-api-key': process.env.GOLD_API_KEY },
-    signal: AbortSignal.timeout(20000),
-  })
-  if (!res.ok) throw new Error(`Gold history source failed (${res.status})`)
-
-  const rows = await res.json()
-  // the API sends prices as strings and days as "2026-09-29 00:00:00" (UTC)
-  const ops = rows
-    .map((r) => ({ hour: new Date(`${String(r.day).slice(0, 10)}T00:00:00Z`), usd: Number(r.avg_price) }))
-    .filter((r) => !Number.isNaN(r.hour.getTime()) && r.usd > 0)
-    .map((r) => ({
-      updateOne: {
-        filter: { hour: r.hour },
-        update: { $setOnInsert: { usd: r.usd } },
-        upsert: true,
-      },
-    }))
-  if (ops.length) await GoldPrice.bulkWrite(ops)
-  return ops.length
+  if (!cached) throw lastError
+  return cached
 }
-*/
 
 module.exports = { getGold }
